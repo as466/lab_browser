@@ -7,6 +7,7 @@ import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Worker;
 import javafx.concurrent.Worker.State;
 import javafx.event.ActionEvent;
+import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -61,10 +62,12 @@ public class BrowserView {
     private Button myBackButton;
     private Button myNextButton;
     private Button myHomeButton;
+    private Button myFavoriteButton;
     // favorites
     private ComboBox<String> myFavorites;
     // get strings from resource file
     private ResourceBundle myResources;
+    private ResourceBundle myErrorResources;
     // the data
     private BrowserModel myModel;
 
@@ -75,6 +78,7 @@ public class BrowserView {
         myModel = model;
         // use resources for labels
         myResources = ResourceBundle.getBundle(DEFAULT_RESOURCE_PACKAGE + language);
+        myErrorResources = ResourceBundle.getBundle(DEFAULT_RESOURCE_PACKAGE + "errors");
         BorderPane root = new BorderPane();
         // must be first since other panels may refer to page
         root.setCenter(makePageDisplay());
@@ -84,19 +88,21 @@ public class BrowserView {
         enableButtons();
         // create scene to hold UI
         myScene = new Scene(root, DEFAULT_SIZE.width, DEFAULT_SIZE.height);
-        //myScene.getStylesheets().add(DEFAULT_RESOURCE_PACKAGE + STYLESHEET);
+        myScene.getStylesheets().add(DEFAULT_RESOURCE_PACKAGE + STYLESHEET);
     }
 
     /**
      * Display given URL.
      */
-    public void showPage (String url) {
-        URL valid = myModel.go(url);
-        if (url != null) {
+    public void showPage (String url) throws BrowserException {
+        //URL valid = myModel.go(url);
+        try {
+        	URL valid = myModel.go(url);
             update(valid);
-        }
-        else {
-            showError("Could not load " + url);
+        	
+        } catch (BrowserException b){
+        	showError(myErrorResources.getString("InvalidUrl"));
+        	System.out.println("NO HOME");
         }
     }
 
@@ -126,22 +132,45 @@ public class BrowserView {
 
     // move to the next URL in the history
     private void next () {
-        update(myModel.next());
+        
+        try {
+        	
+        	update(myModel.next());
+        	
+        } catch (BrowserException b){
+        	showError(myErrorResources.getString("InvalidNextUrl"));
+        }
     }
 
     // move to the previous URL in the history
     private void back () {
-        update(myModel.back());
+    	try {
+    		update(myModel.back());
+        } catch (BrowserException b){
+        	showError(myErrorResources.getString("InvalidBack"));
+        }
+        
     }
 
     // change current URL to the home page, if set
     private void home () {
-        showPage(myModel.getHome().toString());
+    	try {   	
+    		showPage(myModel.getHome().toString());
+        } catch (BrowserException b){
+        	showError(myResources.getString("InvalidHome"));
+        	
+        }
+        
     }
 
     // change page to favorite choice
     private void showFavorite (String favorite) {
-        showPage(myModel.getFavorite(favorite).toString());
+    	try {
+			showPage(myModel.getFavorite(favorite).toString());	
+        } catch (BrowserException b){
+        	showError(myResources.getString("InvalidFavorite"));
+        }
+        
     }
 
     // update just the view to display given URL
@@ -210,6 +239,16 @@ public class BrowserView {
         result.getChildren().add(myNextButton);
         myHomeButton = makeButton("HomeCommand", event -> home());
         result.getChildren().add(myHomeButton);
+        
+        myFavorites = new ComboBox<String>();
+        myFavorites.setPromptText(myResources.getString("FavoriteFirstItem"));
+        myFavorites.setOnAction((ActionEvent ev) -> {
+            String favorite =  myFavorites.getSelectionModel().getSelectedItem().toString();
+            showFavorite(favorite);
+            });
+       // result.getChildren().add(myFavorites);
+        myFavoriteButton = makeButton("FavoritePromptTitle", event -> addFavorite());
+        result.getChildren().add(myFavoriteButton);
         // if user presses button or enter in text field, load/show the URL
         EventHandler<ActionEvent> showHandler = new ShowPage();
         result.getChildren().add(makeButton("GoCommand", showHandler));
@@ -217,6 +256,7 @@ public class BrowserView {
         result.getChildren().add(myURLDisplay);
         return result;
     }
+    
 
     // make buttons for setting favorites/home URLs
     private Node makePreferencesPanel () {
@@ -225,6 +265,7 @@ public class BrowserView {
             myModel.setHome();
             enableButtons();
         }));
+        result.getChildren().add(myFavorites);
         return result;
     }
 
@@ -258,8 +299,14 @@ public class BrowserView {
     // very old style way create a callback (inner class)
     private class ShowPage implements EventHandler<ActionEvent> {
         @Override      
-        public void handle (ActionEvent event) {       
-            showPage(myURLDisplay.getText());      
+        public void handle (ActionEvent event) { 
+        	try
+        	{
+        		showPage(myURLDisplay.getText());  
+        	} catch(BrowserException b){
+        		showError(myResources.getString("InvalidUrl"));
+        	}
+                
         }      
     }
 
@@ -279,7 +326,12 @@ public class BrowserView {
                     if (href != null) {
                         String domEventType = event.getType();
                         if (domEventType.equals(EVENT_CLICK)) {
-                            showPage(href);
+                        	try{
+                        		showPage(href);
+                        	} catch(BrowserException b){
+                        		showError(myResources.getString("InvalidPage"));
+                        	}
+                            
                         } else if (domEventType.equals(EVENT_MOUSEOVER)) {
                             showStatus(href);
                         } else if (domEventType.equals(EVENT_MOUSEOUT)) {
